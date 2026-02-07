@@ -5,7 +5,7 @@ public with sharing class ProjStageSyncHandler {
     // Generic handlers that operate on SObjects for a given object API name
     public static void handleBeforeUpdate(List<SObject> newPending, Map<Id, SObject> oldMap, String objectApiName) {
         if (newPending == null || newPending.isEmpty()) return;
-        String runKey = ProjectStageSync_RunKeyHelper.getRunKey(objectApiName);
+        String runKey = ProjStageSyncRunKeyHelper.getRunKey(objectApiName);
         for (SObject r : newPending) {
             r.put('ProjectStage_Sync_RunKey__c', runKey);
             r.put('ProjectStage_Sync_Status__c', 'Pending');
@@ -13,8 +13,8 @@ public with sharing class ProjStageSyncHandler {
     }
 
     public static void handleAfterUpdate(List<SObject> newPending, Map<Id, SObject> oldMap, String objectApiName) {
-        if (ProjectStageSync_RunKeyHelper.markEnqueued(objectApiName)) {
-            System.enqueueJob(new ProjectStageSync_QueueableWorker(ProjectStageSync_RunKeyHelper.getRunKey(objectApiName), objectApiName));
+        if (ProjStageSyncRunKeyHelper.markEnqueued(objectApiName)) {
+            System.enqueueJob(new ProjStageSyncQueueableWorker(ProjStageSyncRunKeyHelper.getRunKey(objectApiName), objectApiName));
         }
     }
 
