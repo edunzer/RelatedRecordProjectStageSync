@@ -39,4 +39,57 @@ private class ProjStageSyncHandlerTest {
 		ProjStageSyncHandler.handleAfterUpdate(incoming, null);
 		Test.stopTest();
 	}
+
+        @isTest
+    static void testHandleBeforeUpdateSetsFieldsForResourceRequest() {
+        pse__Resource_Request__c r = new pse__Resource_Request__c();
+        List<pse__Resource_Request__c> listR = new List<pse__Resource_Request__c>{ r };
+
+        ProjStageSyncHandler.handleBeforeUpdate(listR, null);
+
+        System.assertNotEquals(null, listR[0].get('ProjectStage_Sync_RunKey__c'));
+        System.assertEquals('Pending', String.valueOf(listR[0].get('ProjectStage_Sync_Status__c')));
+    }
+
+    @isTest static void testHandleBeforeUpdateSetsFieldsForAssignment() {
+        pse__Assignment__c a = new pse__Assignment__c();
+        List<pse__Assignment__c> listA = new List<pse__Assignment__c>{ a };
+
+        ProjStageSyncHandler.handleBeforeUpdate(listA, null);
+
+        System.assertNotEquals(null, listA[0].get('ProjectStage_Sync_RunKey__c'));
+        System.assertEquals('Pending', String.valueOf(listA[0].get('ProjectStage_Sync_Status__c')));
+    }
+
+    @isTest static void testHandleAfterUpdateEnqueuesAndClears() {
+        String objectApiName = 'pse__Resource_Request__c';
+        // ensure clean enqueued state
+        ProjStageSyncRunKeyHelper.clearEnqueued(objectApiName);
+
+        pse__Resource_Request__c r = new pse__Resource_Request__c();
+        List<pse__Resource_Request__c> listR = new List<pse__Resource_Request__c>{ r };
+
+        Test.startTest();
+        ProjStageSyncHandler.handleAfterUpdate(listR, null);
+        Test.stopTest();
+
+        // After the handler enqueues and the queueable runs, the enqueued flag should be cleared
+        Boolean canMarkAgain = ProjStageSyncRunKeyHelper.markEnqueued(objectApiName);
+        System.assertEquals(true, canMarkAgain);
+    }
+
+    @isTest static void testHandleAfterUpdateEnqueuesAndClears_Assignment() {
+        String objectApiName = 'pse__Assignment__c';
+        ProjStageSyncRunKeyHelper.clearEnqueued(objectApiName);
+
+        pse__Assignment__c a = new pse__Assignment__c();
+        List<pse__Assignment__c> listA = new List<pse__Assignment__c>{ a };
+
+        Test.startTest();
+        ProjStageSyncHandler.handleAfterUpdate(listA, null);
+        Test.stopTest();
+
+        Boolean canMarkAgain = ProjStageSyncRunKeyHelper.markEnqueued(objectApiName);
+        System.assertEquals(true, canMarkAgain);
+    }
 }
