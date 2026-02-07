@@ -63,12 +63,12 @@ public with sharing class ProjStageSyncQueueableWorker {
         Integer defaultSize = 20;
         try {
             if (objectApiName == 'pse__Assignment__c') {
-                ProjectStageSyncSettings s = [SELECT Assignment_Chunk_Size__c FROM ProjectStageSyncSettings LIMIT 1];
+                ProjectStageSyncSettings__c s = [SELECT Assignment_Chunk_Size__c FROM ProjectStageSyncSettings__c LIMIT 1];
                 if (s != null && s.Assignment_Chunk_Size__c != null) {
                     return Integer.valueOf(String.valueOf(s.Assignment_Chunk_Size__c));
                 }
             } else if  (objectApiName == 'pse__Resource_Request__c'){
-                ProjectStageSyncSettings s = [SELECT Resource_Request_Chunk_Size__c FROM ProjectStageSyncSettings LIMIT 1];
+                ProjectStageSyncSettings__c s = [SELECT Resource_Request_Chunk_Size__c FROM ProjectStageSyncSettings__c LIMIT 1];
                 if (s != null && s.Resource_Request_Chunk_Size__c != null) {
                     return Integer.valueOf(String.valueOf(s.Resource_Request_Chunk_Size__c));
                 }
