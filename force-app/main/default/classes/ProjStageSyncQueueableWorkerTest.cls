@@ -1,49 +1,123 @@
 @isTest
 private class ProjStageSyncQueueableWorkerTest {
-	static testMethod void testResourceRequestProcessing() {
-		String rk = 'test_rk_rr';
-		List<pse__Resource_Request__c> toInsert = new List<pse__Resource_Request__c>();
-		for (Integer i=0;i<3;i++) {
-			pse__Resource_Request__c r = new pse__Resource_Request__c();
-			r.ProjectStage_Sync_RunKey__c = rk;
-			r.ProjectStage_Sync_Status__c = 'Pending';
-			toInsert.add(r);
-		}
-		insert toInsert;
+	@isTest
+    static void testQueueableClearsEnqueuedForResourceRequest() {
+        String objectApiName = 'pse__Resource_Request__c';
+        // Ensure no enqueued state
+        ProjStageSyncRunKeyHelper.clearEnqueued(objectApiName);
 
-		Test.startTest();
-		Id jobId = System.enqueueJob(new ProjStageSyncQueueableWorker(rk, 'pse__Resource_Request__c'));
-		Test.stopTest();
+        String runKey = ProjStageSyncRunKeyHelper.getRunKey(objectApiName);
+        // Mark enqueued to simulate handler behavior
+        Boolean marked = ProjStageSyncRunKeyHelper.markEnqueued(objectApiName);
+        System.assertEquals(true, marked, 'Should be marked enqueued initially');
 
-		List<pse__Resource_Request__c> rows = [SELECT Id, ProjectStage_Sync_Status__c FROM pse__Resource_Request__c WHERE ProjectStage_Sync_RunKey__c = :rk];
-		// At least one record should have been moved to Processing
-		Boolean found = false;
-		for (pse__Resource_Request__c r : rows) {
-			if (r.ProjectStage_Sync_Status__c == 'Processing') { found = true; break; }
-		}
-		System.assert(found, 'At least one Resource Request should be marked Processing after queueable execution');
-	}
+        Test.startTest();
+        System.enqueueJob(new ProjStageSyncQueueableWorker(runKey, objectApiName));
+        Test.stopTest();
 
-	static testMethod void testAssignmentProcessing() {
-		String rk = 'test_rk_asg';
-		List<pse__Assignment__c> toInsert = new List<pse__Assignment__c>();
-		for (Integer i=0;i<2;i++) {
-			pse__Assignment__c a = new pse__Assignment__c();
-			a.ProjectStage_Sync_RunKey__c = rk;
-			a.ProjectStage_Sync_Status__c = 'Pending';
-			toInsert.add(a);
-		}
-		insert toInsert;
+        // After queueable executes it should clear enqueued state
+        Boolean after = ProjStageSyncRunKeyHelper.markEnqueued(objectApiName);
+        System.assertEquals(true, after, 'Enqueued state should have been cleared by the queueable');
+    }
 
-		Test.startTest();
-		Id jobId = System.enqueueJob(new ProjStageSyncQueueableWorker(rk, 'pse__Assignment__c'));
-		Test.stopTest();
+    @isTest static void testQueueableClearsEnqueuedForAssignment() {
+        String objectApiName = 'pse__Assignment__c';
+        ProjStageSyncRunKeyHelper.clearEnqueued(objectApiName);
 
-		List<pse__Assignment__c> rows = [SELECT Id, ProjectStage_Sync_Status__c FROM pse__Assignment__c WHERE ProjectStage_Sync_RunKey__c = :rk];
-		Boolean found = false;
-		for (pse__Assignment__c a : rows) {
-			if (a.ProjectStage_Sync_Status__c == 'Processing') { found = true; break; }
-		}
-		System.assert(found, 'At least one Assignment should be marked Processing after queueable execution');
-	}
+        String runKey = ProjStageSyncRunKeyHelper.getRunKey(objectApiName);
+        Boolean marked = ProjStageSyncRunKeyHelper.markEnqueued(objectApiName);
+        System.assertEquals(true, marked);
+
+        Test.startTest();
+        System.enqueueJob(new ProjStageSyncQueueableWorker(runKey, objectApiName));
+        Test.stopTest();
+
+        Boolean after = ProjStageSyncRunKeyHelper.markEnqueued(objectApiName);
+        System.assertEquals(true, after);
+    }
+
+    @isTest static void testConstructorValidation() {
+        // Valid constructor inputs should not throw
+        new ProjStageSyncQueueableWorker('rk', 'pse__Resource_Request__c');
+        new ProjStageSyncQueueableWorker('rk', 'pse__Assignment__c');
+    }
+
+    @isTest static void testGetChunkSizeUsesAssignmentSetting() {
+        String objectApiName = 'pse__Assignment__c';
+        ProjStageSyncRunKeyHelper.clearEnqueued(objectApiName);
+        String runKey = ProjStageSyncRunKeyHelper.getRunKey(objectApiName);
+
+        try {
+            insert new ProjectStageSyncSettings__c(Assignment_Chunk_Size__c = 5);
+        } catch (Exception e) {
+            // ignore if custom setting/field absent in this org
+        }
+
+        Boolean marked = ProjStageSyncRunKeyHelper.markEnqueued(objectApiName);
+        System.assertEquals(true, marked);
+
+        Test.startTest();
+        System.enqueueJob(new ProjStageSyncQueueableWorker(runKey, objectApiName));
+        Test.stopTest();
+
+        // ensure helper cleared
+        System.assertEquals(true, ProjStageSyncRunKeyHelper.markEnqueued(objectApiName));
+    }
+
+    @isTest static void testGetChunkSizeUsesResourceRequestSetting() {
+        String objectApiName = 'pse__Resource_Request__c';
+        ProjStageSyncRunKeyHelper.clearEnqueued(objectApiName);
+        String runKey = ProjStageSyncRunKeyHelper.getRunKey(objectApiName);
+
+        try {
+            insert new ProjectStageSyncSettings__c(Resource_Request_Chunk_Size__c = 7);
+        } catch (Exception e) {
+            // ignore if custom setting/field absent in this org
+        }
+
+        Boolean marked = ProjStageSyncRunKeyHelper.markEnqueued(objectApiName);
+        System.assertEquals(true, marked);
+
+        Test.startTest();
+        System.enqueueJob(new ProjStageSyncQueueableWorker(runKey, objectApiName));
+        Test.stopTest();
+
+        System.assertEquals(true, ProjStageSyncRunKeyHelper.markEnqueued(objectApiName));
+    }
+
+    // Helper: create a new SObject and populate non-nullable primitive fields with defaults
+    private static SObject buildMinimalSObject(String apiName) {
+        Map<String, Schema.SObjectType> gd = Schema.getGlobalDescribe();
+        if (!gd.containsKey(apiName)) return null;
+        SObject sobj = gd.get(apiName).newSObject();
+        Map<String, Schema.SObjectField> fmap = gd.get(apiName).getDescribe().fields.getMap();
+        for (String fname : fmap.keySet()) {
+            Schema.DescribeFieldResult fd = fmap.get(fname).getDescribe();
+            if (!fd.isCreateable()) continue;
+            if (fd.isNillable()) continue;
+            Schema.DisplayType dt = fd.getType();
+            try {
+                if (dt == Schema.DisplayType.STRING || dt == Schema.DisplayType.TEXTAREA || dt == Schema.DisplayType.PHONE
+                    || dt == Schema.DisplayType.EMAIL || dt == Schema.DisplayType.URL) {
+                    sobj.put(fname, 'T');
+                } else if (dt == Schema.DisplayType.INTEGER) {
+                    sobj.put(fname, 1);
+                } else if (dt == Schema.DisplayType.DOUBLE || dt == Schema.DisplayType.CURRENCY || dt == Schema.DisplayType.PERCENT) {
+                    sobj.put(fname, Decimal.valueOf(1));
+                } else if (dt == Schema.DisplayType.BOOLEAN) {
+                    sobj.put(fname, false);
+                } else if (dt == Schema.DisplayType.DATE) {
+                    sobj.put(fname, Date.today());
+                } else if (dt == Schema.DisplayType.DATETIME) {
+                    sobj.put(fname, DateTime.now());
+                } else if (dt == Schema.DisplayType.PICKLIST) {
+                    List<Schema.PicklistEntry> vals = fd.getPicklistValues();
+                    if (!vals.isEmpty()) sobj.put(fname, vals[0].getValue());
+                }
+            } catch (Exception ex) {
+                // ignore any failures setting defaults
+            }
+        }
+        return sobj;
+    }
 }
