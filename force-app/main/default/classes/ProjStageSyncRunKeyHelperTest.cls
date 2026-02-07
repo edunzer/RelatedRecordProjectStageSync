@@ -34,4 +34,88 @@ private class ProjStageSyncRunKeyHelperTest {
 		}
 	}
 
+    @isTest
+    static void testGetRunKeyConsistencyAndFormat_ResourceRequest() {
+        String obj = 'pse__Resource_Request__c';
+        String rk1 = ProjStageSyncRunKeyHelper.getRunKey(obj);
+        String rk2 = ProjStageSyncRunKeyHelper.getRunKey(obj);
+        System.assertEquals(rk1, rk2, 'Run keys should be stable within the same transaction');
+        System.assert(rk1.startsWith(obj + '_hrs_'), 'Run key should start with objectApiName + _hrs_');
+    }
+
+    @isTest static void testMarkEnqueuedAndClear_ResourceRequest() {
+        String obj = 'pse__Resource_Request__c';
+        // ensure clean state
+        ProjStageSyncRunKeyHelper.clearEnqueued(obj);
+
+        Boolean first = ProjStageSyncRunKeyHelper.markEnqueued(obj);
+        Boolean second = ProjStageSyncRunKeyHelper.markEnqueued(obj);
+        System.assertEquals(true, first, 'First markEnqueued should return true');
+        System.assertEquals(false, second, 'Second markEnqueued in same transaction should return false');
+
+        ProjStageSyncRunKeyHelper.clearEnqueued(obj);
+        Boolean third = ProjStageSyncRunKeyHelper.markEnqueued(obj);
+        System.assertEquals(true, third, 'After clearEnqueued, markEnqueued should return true again');
+    }
+
+    @isTest
+    static void testGetRunKeyConsistencyAndFormat_Assignment() {
+        String obj = 'pse__Assignment__c';
+        String rk1 = ProjStageSyncRunKeyHelper.getRunKey(obj);
+        String rk2 = ProjStageSyncRunKeyHelper.getRunKey(obj);
+        System.assertEquals(rk1, rk2, 'Run keys should be stable within the same transaction');
+        System.assert(rk1.startsWith(obj + '_hrs_'), 'Run key should start with objectApiName + _hrs_');
+    }
+
+    @isTest static void testMarkEnqueuedAndClear_Assignment() {
+        String obj = 'pse__Assignment__c';
+        // ensure clean state
+        ProjStageSyncRunKeyHelper.clearEnqueued(obj);
+
+        Boolean first = ProjStageSyncRunKeyHelper.markEnqueued(obj);
+        Boolean second = ProjStageSyncRunKeyHelper.markEnqueued(obj);
+        System.assertEquals(true, first, 'First markEnqueued should return true');
+        System.assertEquals(false, second, 'Second markEnqueued in same transaction should return false');
+
+        ProjStageSyncRunKeyHelper.clearEnqueued(obj);
+        Boolean third = ProjStageSyncRunKeyHelper.markEnqueued(obj);
+        System.assertEquals(true, third, 'After clearEnqueued, markEnqueued should return true again');
+    }
+
+    @isTest static void testIsEnabledDefaultsAndSettings() {
+        // Remove any existing settings to validate default behavior
+        try {
+            List<ProjectStageSyncSettings__c> existing = [SELECT Id FROM ProjectStageSyncSettings__c];
+            if (!existing.isEmpty()) delete existing;
+        } catch (Exception e) {
+            // ignore if settings object not present in test org
+        }
+
+        System.assertEquals(true, ProjStageSyncRunKeyHelper.isEnabled('pse__Resource_Request__c'));
+        System.assertEquals(true, ProjStageSyncRunKeyHelper.isEnabled('pse__Assignment__c'));
+
+        // Insert a settings record with explicit booleans and verify
+        ProjectStageSyncSettings__c s = new ProjectStageSyncSettings__c();
+        s.ResourceRequest_Enable_ProjectStage_Sync__c = false;
+        s.Assignment_Enable_ProjectStage_Sync__c = true;
+        insert s;
+
+        System.assertEquals(false, ProjStageSyncRunKeyHelper.isEnabled('pse__Resource_Request__c'));
+        System.assertEquals(true, ProjStageSyncRunKeyHelper.isEnabled('pse__Assignment__c'));
+
+        delete s;
+    }
+
+    @isTest static void testUnsupportedAndBlankAssertions() {
+        // Unsupported object should throw our specific exception
+        try {
+            ProjStageSyncRunKeyHelper.isEnabled('Account');
+            System.assert(false, 'Expected UnsupportedObjectApiNameException for unsupported object');
+        } catch (Exception e) {
+            System.assert(e instanceof ProjStageSyncRunKeyHelper.UnsupportedObjectApiNameException, 'Exception should be UnsupportedObjectApiNameException');
+        }
+
+        // Skip testing methods that assert on blank inputs to avoid uncatchable assertion failures
+    }
+
 }
