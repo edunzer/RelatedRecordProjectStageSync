@@ -1,4 +1,4 @@
-public with sharing class ProjStageSyncQueueableWorker {
+public with sharing class ProjStageSyncQueueableWorker implements Queueable{
     private final String runKey;
     private final String objectApiName;
 
