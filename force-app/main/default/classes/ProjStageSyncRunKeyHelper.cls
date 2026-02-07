@@ -59,7 +59,7 @@ public with sharing class ProjStageSyncRunKeyHelper {
             fieldName = 'Assignment_Enable_ProjectStage_Sync__c';
         }
         if (objectApiName == 'pse__Resource_Request__c') {
-            fieldName = 'Resource_Request_Enable_ProjectStage_Sync__c';
+            fieldName = 'ResourceRequest_Enable_ProjectStage_Sync__c';
         }
 
         if (fieldName == null) return true;
