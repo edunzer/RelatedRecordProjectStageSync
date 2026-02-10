@@ -6,6 +6,6 @@ trigger Assignment_ObjectTrigger on pse__Assignment__c (before insert, before up
 
 	// Project Stage Sync 
 	if (!ProjStageSyncRunKeyHelper.isEnabled('pse__Assignment__c')) return;
-	ProjStageSync_Handler.processTriggerAssignment(Trigger.new, Trigger.oldMap);
+	ProjStageSyncHandler.processTriggerAssignment(Trigger.new, Trigger.oldMap);
 
 }
