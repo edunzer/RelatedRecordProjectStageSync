@@ -18,20 +18,54 @@ private class ProjStageSyncRunKeyHelperTest {
 	}
 
 	static testMethod void testIsEnabledAndUnsupported() {
-		// Default behaviour when settings are not present: enabled (true)
-		Boolean en1 = ProjStageSyncRunKeyHelper.isEnabled('pse__Assignment__c');
-		System.assertEquals(true, en1);
+        Map<String, Schema.SObjectType> gd = Schema.getGlobalDescribe();
+        // Unsupported object should throw the helper's custom exception
+        try {
+            ProjStageSyncRunKeyHelper.isEnabled('Account');
+            System.assert(false, 'UnsupportedObjectApiNameException expected for Account');
+        } catch (ProjStageSyncRunKeyHelper.UnsupportedObjectApiNameException e) {
+            // expected
+        }
 
-		Boolean en2 = ProjStageSyncRunKeyHelper.isEnabled('pse__Resource_Request__c');
-		System.assertEquals(true, en2);
-
-		// Unsupported object should throw the helper's custom exception
-		try {
-			ProjStageSyncRunKeyHelper.isEnabled('Account');
-			System.assert(false, 'UnsupportedObjectApiNameException expected for Account');
-		} catch (ProjStageSyncRunKeyHelper.UnsupportedObjectApiNameException e) {
-			// expected
-		}
+        // For supported objects, behavior depends on whether the custom setting and fields exist in this org.
+        if (!gd.containsKey('ProjectStageSyncSettings__c')) {
+            try {
+                ProjStageSyncRunKeyHelper.isEnabled('pse__Assignment__c');
+                System.assert(false, 'Expected MissingCustomSettingException when custom setting absent');
+            } catch (ProjStageSyncRunKeyHelper.MissingCustomSettingException e) {
+                // expected
+            }
+        } else {
+            Map<String, Schema.SObjectField> fmap = gd.get('ProjectStageSyncSettings__c').getDescribe().fields.getMap();
+            if (!fmap.containsKey('Assignment_Enable_ProjectStage_Sync__c')) {
+                try {
+                    ProjStageSyncRunKeyHelper.isEnabled('pse__Assignment__c');
+                    System.assert(false, 'Expected MissingFieldMappingException when field absent');
+                } catch (ProjStageSyncRunKeyHelper.MissingFieldMappingException e) {
+                    // expected
+                }
+            } else {
+                // If the setting object and field exist but no record present, expect MissingSettingsRecordException
+                try {
+                    List<ProjectStageSyncSettings__c> existing = [SELECT Id FROM ProjectStageSyncSettings__c];
+                    if (!existing.isEmpty()) delete existing;
+                } catch (Exception ex) {
+                    // ignore
+                }
+                try {
+                    ProjStageSyncRunKeyHelper.isEnabled('pse__Assignment__c');
+                    System.assert(false, 'Expected MissingSettingsRecordException when no settings record exists');
+                } catch (ProjStageSyncRunKeyHelper.MissingSettingsRecordException e) {
+                    // expected
+                }
+                // Insert a settings record and verify boolean behavior
+                ProjectStageSyncSettings__c s = new ProjectStageSyncSettings__c();
+                s.Assignment_Enable_ProjectStage_Sync__c = true;
+                insert s;
+                System.assertEquals(true, ProjStageSyncRunKeyHelper.isEnabled('pse__Assignment__c'));
+                delete s;
+            }
+        }
 	}
 
     @isTest
@@ -83,16 +117,60 @@ private class ProjStageSyncRunKeyHelperTest {
     }
 
     @isTest static void testIsEnabledDefaultsAndSettings() {
-        // Remove any existing settings to validate default behavior
+        Map<String, Schema.SObjectType> gd = Schema.getGlobalDescribe();
+        if (!gd.containsKey('ProjectStageSyncSettings__c')) {
+            try {
+                ProjStageSyncRunKeyHelper.isEnabled('pse__Resource_Request__c');
+                System.assert(false, 'Expected MissingCustomSettingException when custom setting absent');
+            } catch (ProjStageSyncRunKeyHelper.MissingCustomSettingException e) {
+                // expected
+            }
+            try {
+                ProjStageSyncRunKeyHelper.isEnabled('pse__Assignment__c');
+                System.assert(false, 'Expected MissingCustomSettingException when custom setting absent');
+            } catch (ProjStageSyncRunKeyHelper.MissingCustomSettingException e) {
+                // expected
+            }
+            return;
+        }
+
+        Map<String, Schema.SObjectField> fmap = gd.get('ProjectStageSyncSettings__c').getDescribe().fields.getMap();
+        if (!fmap.containsKey('ResourceRequest_Enable_ProjectStage_Sync__c') || !fmap.containsKey('Assignment_Enable_ProjectStage_Sync__c')) {
+            try {
+                ProjStageSyncRunKeyHelper.isEnabled('pse__Resource_Request__c');
+                System.assert(false, 'Expected MissingFieldMappingException when field absent');
+            } catch (ProjStageSyncRunKeyHelper.MissingFieldMappingException e) {
+                // expected
+            }
+            try {
+                ProjStageSyncRunKeyHelper.isEnabled('pse__Assignment__c');
+                System.assert(false, 'Expected MissingFieldMappingException when field absent');
+            } catch (ProjStageSyncRunKeyHelper.MissingFieldMappingException e) {
+                // expected
+            }
+            return;
+        }
+
+        // Ensure no settings record exists to validate missing-record behavior
         try {
             List<ProjectStageSyncSettings__c> existing = [SELECT Id FROM ProjectStageSyncSettings__c];
             if (!existing.isEmpty()) delete existing;
         } catch (Exception e) {
-            // ignore if settings object not present in test org
+            // ignore
         }
 
-        System.assertEquals(true, ProjStageSyncRunKeyHelper.isEnabled('pse__Resource_Request__c'));
-        System.assertEquals(true, ProjStageSyncRunKeyHelper.isEnabled('pse__Assignment__c'));
+        try {
+            ProjStageSyncRunKeyHelper.isEnabled('pse__Resource_Request__c');
+            System.assert(false, 'Expected MissingSettingsRecordException when no settings record exists');
+        } catch (ProjStageSyncRunKeyHelper.MissingSettingsRecordException e) {
+            // expected
+        }
+        try {
+            ProjStageSyncRunKeyHelper.isEnabled('pse__Assignment__c');
+            System.assert(false, 'Expected MissingSettingsRecordException when no settings record exists');
+        } catch (ProjStageSyncRunKeyHelper.MissingSettingsRecordException e) {
+            // expected
+        }
 
         // Insert a settings record with explicit booleans and verify
         ProjectStageSyncSettings__c s = new ProjectStageSyncSettings__c();
