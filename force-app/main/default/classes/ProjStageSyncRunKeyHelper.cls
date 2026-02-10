@@ -1,8 +1,5 @@
 public with sharing class ProjStageSyncRunKeyHelper {
     public class UnsupportedObjectApiNameException extends Exception {}
-    public class MissingCustomSettingException extends Exception {}
-    public class MissingFieldMappingException extends Exception {}
-    public class MissingSettingsRecordException extends Exception {}
     private static Map<String, String> runKeys = new Map<String, String>();
     private static Set<String> enqueuedObjects = new Set<String>();
     
@@ -51,12 +48,9 @@ public with sharing class ProjStageSyncRunKeyHelper {
         }
 
         // Use dynamic describe and dynamic SOQL to avoid compile-time dependency on a
-        // custom setting or its fields. If the object/field or records are missing,
-        // fail loudly so callers are aware of missing configuration.
+        // custom setting or its fields. If the object/field is missing, treat as enabled.
         Map<String, Schema.SObjectType> gd = Schema.getGlobalDescribe();
-        if (!gd.containsKey('ProjectStageSyncSettings__c')) {
-            throw new MissingCustomSettingException('ProjectStageSyncSettings__c custom setting is not present in this org');
-        }
+        if (!gd.containsKey('ProjectStageSyncSettings__c')) return true;
 
         Schema.SObjectType sd = gd.get('ProjectStageSyncSettings__c');
         Map<String, Schema.SObjectField> fieldMap = sd.getDescribe().fields.getMap();
@@ -68,31 +62,22 @@ public with sharing class ProjStageSyncRunKeyHelper {
             fieldName = 'ResourceRequest_Enable_ProjectStage_Sync__c';
         }
 
-        if (fieldName == null) {
-            throw new MissingFieldMappingException('No field mapping configured for object: ' + objectApiName);
-        }
+        if (fieldName == null) return true;
 
-        if (!fieldMap.containsKey(fieldName)) {
-            throw new MissingFieldMappingException('Expected field ' + fieldName + ' not found on ProjectStageSyncSettings__c');
-        }
+        if (!fieldMap.containsKey(fieldName)) return true;
 
         try {
             String soql = 'SELECT ' + fieldName + ' FROM ProjectStageSyncSettings__c LIMIT 1';
             List<SObject> rows = Database.query(soql);
-            if (rows.isEmpty()) {
-                throw new MissingSettingsRecordException('No ProjectStageSyncSettings__c record found');
-            }
+            if (rows.isEmpty()) return true;
             SObject rec = rows[0];
             Object val = rec.get(fieldName);
-            if (val == null) {
-                throw new MissingSettingsRecordException('Field ' + fieldName + ' on ProjectStageSyncSettings__c is null');
-            }
+            if (val == null) return true;
             if (val instanceof Boolean) return (Boolean)val;
             return String.valueOf(val).toLowerCase() == 'true';
         } catch (Exception e) {
-            // Re-throw known helper exceptions so callers can handle them; otherwise wrap
-            if (e instanceof MissingCustomSettingException || e instanceof MissingFieldMappingException || e instanceof MissingSettingsRecordException) throw e;
-            throw e;
+            System.debug('ProjectStageSync_RunKeyHelper.isEnabled (dynamic) error: ' + e);
+            return true;
         }
     }
 
